@@ -1,0 +1,42 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+library(tidyverse)
+library(readODS)
+library(httr)
+```
+
+```{r}
+read_ods("Downloads/electric-vehicle-charging-device-statistics-july-2021.ods")
+```
+
+```{r}
+APE <- read_ods("Downloads/APE_site_data_tables.ods", sheet = 2)
+```
+
+```{r}
+NO2 <- read_ods("Downloads/NO2_tables.ods")
+```
+
+```{r}
+registry <- GET("http://chargepoints.dft.gov.uk/api/retrieve/registry/format/csv/") %>% 
+  content()
+```
+
+```{r}
+
+```
+
+
+```{r}
+type <- GET("http://chargepoints.dft.gov.uk/api/retrieve/type/format/csv/") %>% 
+  content()
+```
+
+```{r}
+read_csv("Documents/GitHub/ev_climate_change_project/raw_data/no2_by_grid_2019.csv")
+```
+
