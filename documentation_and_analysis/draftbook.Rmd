@@ -60,7 +60,7 @@ air_pollution <- unnest(air_pollution)
 
 ```{r}
 # Reading in and skipping first 5 rows
-uk_ev <- read_ods(here("raw_data/ev_by_la.ods"), skip = 5)
+uk_ev <- read_ods(here("raw_data/ev_by_la.ods"), sheet = 2, skip = 5)
 # Making row 1 the variable name
 names(uk_ev) <- uk_ev[1,] 
 # Removing row 1 
@@ -74,7 +74,7 @@ uk_shape_file <- st_read(here("raw_data/Local_Authority_Districts__April_2019__U
   clean_names() %>% 
   st_simplify(dTolerance = 1000) %>%
   st_transform("+proj=longlat +datum=WGS84") %>% 
-  select(lad19cd, long, lat, geometry)
+  select(lad19cd, long, lat, geometry) 
 ```
 
 ```{r}
@@ -82,40 +82,39 @@ uk_shape_file <- st_read(here("raw_data/Local_Authority_Districts__April_2019__U
 uk_ev_map <- uk_ev %>% 
   left_join(uk_shape_file, by = c("ons_la_code_apr_2019" = "lad19cd")) %>% 
   drop_na() %>% 
-  mutate(across(c(x2021_q1:x2011_q4), as.numeric))
+  mutate(across(c(x2021_q1:x2011_q4), as.numeric)) %>% 
+  st_as_sf()
 ```
 
 
 ```{r}
-    pal <- colorBin("Greens", domain = uk_ev_map$x2021_q1, bins = 10)
+    pal <- colorBin("Greens", domain = uk_ev_map$x2021_q1, bins = c(0, 500, 1000, 2500, 5000, 10000, 15000))
     
     uk_ev_map_labels <- sprintf(
-      uk_ev_map$region_local_authority_apr_2019_3, uk_ev_map$x2021_q1)
+      "<strong>%s</strong><br/>%g Electric Vehicles",
+      uk_ev_map$region_local_authority_apr_2019_3, uk_ev_map$x2021_q1) %>% 
+      lapply(htmltools::HTML)
 ```
 
 ```{r}
-leaflet(uk_ev_map) %>% 
+uk_ev_map %>% 
+  leaflet() %>% 
   setView(lng = -4.2026, lat = 55.8, zoom = 4.7, options = list()) %>%
   addProviderTiles(providers$CartoDB.Positron) %>% 
-  addPolygons(data = uk_ev_map$geometry,
-             # fillColor = ~pal(x2021_q1),
-              weight = 0.5,
-              opacity = 0.9, 
-              color = "green",
-              fillOpacity = 0,
-              highlightOptions = highlightOptions(color = "white", weight = 2,
-                                                      bringToFront = TRUE),
-              label = uk_ev_map_labels,
-                  labelOptions = labelOptions(
-                    style = list("font-weight" = "normal", padding = "3px 8px"),
-                    textsize = "15px",
-                    direction = "auto")) %>% 
-  addLegend(pal = pal, values = ~density, opacity = 0.7, title = NULL,
-                position = "bottomright")
+  addPolygons(fillColor = ~pal(x2021_q1),
+    weight = 0.1,
+    opacity = 0.9, 
+    color = "black",
+    fillOpacity = 0.8,
+    highlightOptions = highlightOptions(color = "green", weight = 2,
+                                        bringToFront = TRUE),
+    label = uk_ev_map_labels,
+    labelOptions = labelOptions(
+      style = list("font-weight" = "normal", padding = "3px 8px"),
+      textsize = "15px",
+      direction = "auto")) %>% 
+  addLegend(pal = pal, values = ~x2021_q1, opacity = 0.7, title = NULL,
+            position = "bottomright")
 ```
 
-```{r}
-uk_ev_map$x2021_q1 %>% 
-  range()
-```
 
