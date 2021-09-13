@@ -5,20 +5,29 @@ output: html_notebook
 
 ```{r}
 library(tidyverse)
+library(janitor)
 library(readODS)
 library(httr)
+library(here)
+library(data.table)
+library(sf)
+library(leaflet)
 ```
 
 ```{r}
-read_ods("Downloads/electric-vehicle-charging-device-statistics-july-2021.ods")
+read_ods(here("raw_data/electric-vehicle-charging-device-statistics-june-2021.ods"))
 ```
 
 ```{r}
-APE <- read_ods("Downloads/APE_site_data_tables.ods", sheet = 2)
+getwd()
 ```
 
 ```{r}
-NO2 <- read_ods("Downloads/NO2_tables.ods")
+APE <- read_ods("raw_data/APE_site_data_tables.ods", sheet = 2)
+```
+
+```{r}
+NO2 <- read_ods("raw_data/NO2_tables.ods")
 ```
 
 ```{r}
@@ -27,16 +36,86 @@ registry <- GET("http://chargepoints.dft.gov.uk/api/retrieve/registry/format/csv
 ```
 
 ```{r}
-
-```
-
-
-```{r}
 type <- GET("http://chargepoints.dft.gov.uk/api/retrieve/type/format/csv/") %>% 
   content()
 ```
 
 ```{r}
 read_csv("Documents/GitHub/ev_climate_change_project/raw_data/no2_by_grid_2019.csv")
+```
+
+```{r}
+air_pollution <- GET("https://uk-air.defra.gov.uk/data/sos/service?service=AQD&version=1.0.0&request=GetObservation&temporalFilter=om:phenomenonTime,After,yyyy-mm-ddT00:00:00.000Z") 
+```
+
+```{r}
+air_pollution <- rbindlist(air_pollution$content, fill = TRUE) 
+```
+
+```{r}
+air_pollution <- unnest(air_pollution)
+```   
+
+# How many electric vehicles are on the road across the UK?
+
+```{r}
+# Reading in and skipping first 5 rows
+uk_ev <- read_ods(here("raw_data/ev_by_la.ods"), skip = 5)
+# Making row 1 the variable name
+names(uk_ev) <- uk_ev[1,] 
+# Removing row 1 
+uk_ev <- uk_ev[-1,] %>% 
+  clean_names()
+```
+
+```{r}
+# loading in shape file 
+uk_shape_file <- st_read(here("raw_data/Local_Authority_Districts__April_2019__UK_BFE_v2-shp/Local_Authority_Districts__April_2019__UK_BFE_v2.shp")) %>%
+  clean_names() %>% 
+  st_simplify(dTolerance = 1000) %>%
+  st_transform("+proj=longlat +datum=WGS84") %>% 
+  select(lad19cd, long, lat, geometry)
+```
+
+```{r}
+# Joining uk_ev + shape file 
+uk_ev_map <- uk_ev %>% 
+  left_join(uk_shape_file, by = c("ons_la_code_apr_2019" = "lad19cd")) %>% 
+  drop_na() %>% 
+  mutate(across(c(x2021_q1:x2011_q4), as.numeric))
+```
+
+
+```{r}
+    pal <- colorBin("Greens", domain = uk_ev_map$x2021_q1, bins = 10)
+    
+    uk_ev_map_labels <- sprintf(
+      uk_ev_map$region_local_authority_apr_2019_3, uk_ev_map$x2021_q1)
+```
+
+```{r}
+leaflet(uk_ev_map) %>% 
+  setView(lng = -4.2026, lat = 55.8, zoom = 4.7, options = list()) %>%
+  addProviderTiles(providers$CartoDB.Positron) %>% 
+  addPolygons(data = uk_ev_map$geometry,
+             # fillColor = ~pal(x2021_q1),
+              weight = 0.5,
+              opacity = 0.9, 
+              color = "green",
+              fillOpacity = 0,
+              highlightOptions = highlightOptions(color = "white", weight = 2,
+                                                      bringToFront = TRUE),
+              label = uk_ev_map_labels,
+                  labelOptions = labelOptions(
+                    style = list("font-weight" = "normal", padding = "3px 8px"),
+                    textsize = "15px",
+                    direction = "auto")) %>% 
+  addLegend(pal = pal, values = ~density, opacity = 0.7, title = NULL,
+                position = "bottomright")
+```
+
+```{r}
+uk_ev_map$x2021_q1 %>% 
+  range()
 ```
 
