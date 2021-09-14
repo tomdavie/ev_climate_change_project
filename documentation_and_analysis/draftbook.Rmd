@@ -97,6 +97,7 @@ uk_ev_map <- uk_ev %>%
 ```
 
 ```{r}
+# Geospatial of EV Vehicles in the UK 2021 Q1
 uk_ev_map %>% 
   leaflet() %>% 
   setView(lng = -4.2026, lat = 55.8, zoom = 4.7, options = list()) %>%
@@ -116,6 +117,46 @@ uk_ev_map %>%
   addLegend(pal = pal, values = ~x2021_q1, opacity = 0.7, title = NULL,
             position = "bottomright")
 ```
+
+```{r}
+# Wrangling to create an EV count over time plot 
+uk_ev_longer <- uk_ev %>%
+  # Pivot longer to get year and count columns
+  pivot_longer(cols = c(x2021_q1:x2011_q4), names_to = c("year"), values_to = "no_of_ev") %>% 
+  # Filter so we only have UK as a whole data AND we only want final numbers of the year so Q4 
+  filter(region_local_authority_apr_2019_3 == "United Kingdom" & str_detect(year, "q4")) %>% 
+  # Simplify to just show year
+  mutate(year = case_when(str_detect(year, "2021") ~ "2021",
+         str_detect(year, "2020") ~ "2020",
+         str_detect(year, "2019") ~ "2019",
+         str_detect(year, "2018") ~ "2018",
+         str_detect(year, "2017") ~ "2017",
+         str_detect(year, "2016") ~ "2016",
+         str_detect(year, "2015") ~ "2015",
+         str_detect(year, "2014") ~ "2014",
+         str_detect(year, "2013") ~ "2013",
+         str_detect(year, "2012") ~ "2012",
+         str_detect(year, "2011") ~ "2011"),
+         year = as.numeric(year),
+         no_of_ev = as.numeric(no_of_ev))
+```
+
+
+```{r}
+uk_ev_longer %>% 
+  ggplot() +
+  aes(x = year, y = no_of_ev) +
+  geom_col(fill = "lawngreen") +
+  scale_x_continuous(breaks = c(2011:2020)) +
+  scale_y_continuous(breaks = seq(0, 220000, by = 20000), limits = c(0, 220000)) +
+  labs(title = "\nNumber of Electric Vehicles over time in the UK\n",
+       x = "\nYear\n",
+       y = "\nNumber of Electric Vehicles\n") +
+  theme_minimal() 
+```
+
+  
+
 
 # Row binding grid NO2 data 
 
