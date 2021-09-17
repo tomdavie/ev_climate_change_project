@@ -439,7 +439,16 @@ no2_difference <- no2_difference %>%
   rename("x2014" = "2014",
          "x2019" = "2019") %>% 
   mutate(no2_diff_2014_2019 = x2014 - x2019) %>% 
+#Remove this separation when put in cleaning script
+no2_difference <- no2_difference %>% 
   ungroup()
+#Remove this separation when put in cleaning script
+no2_difference <- no2_difference %>% 
+  drop_na()
+#Remove this separation when put in cleaning script
+# Changing all negative numbers to zero as these aren't of interest to us
+no2_difference <- no2_difference %>% 
+  mutate(no2_diff_2014_2019 = if_else(no2_diff_2014_2019 < 0, 0, no2_diff_2014_2019))
 ```
 
 ```{r}
@@ -452,43 +461,39 @@ no2_diff_row <- no2_difference %>%
 
 # Source data
 xy <- no2_diff_row %>% 
-  select(x, y, rowid)
+  dplyr::select(x, y, rowid)
 
 # Transformed data
 pj <- project(xy, proj4string, inverse=TRUE)
 latlon <- data.frame(xy, lat=pj$y, lon=pj$x)
 no2_diff_final <-  merge(no2_diff_row, latlon, by.x = "rowid", by.y = "rowid") %>%
-  select(lat, lon, no2_diff_2014_2019) 
-```
-
-
-```{r}
-    pal <- colorBin("Greens", domain = no2_difference$no2_diff_2014_2019, bins = c(0, 500, 1000, 2500, 5000, 10000, 15000))
-    
-    no2_diff_labels <- sprintf(
-      "<strong>%s</strong><br/>%g NO2 Diff",
-      no2_difference$uk_grid_code, no2_difference$no2_diff_2014_2019) %>% 
-      lapply(htmltools::HTML)
+  dplyr::select(lat, lon, no2_diff_2014_2019) 
 ```
 
 ```{r}
-# Geospatial of EV Vehicles in the UK 2021 Q1
-no2_difference %>% 
-  leaflet() %>% 
+# Geospatial of No2 diff 2014 to 2019
+bins <- c(0, 5, 10, 15, 20, 25, 30)
+pal <- colorBin("Spectral", domain = no2_diff_final$no2_diff_2014_2019, bins = bins, na.color = "transparent", reverse = TRUE)
+
+leaflet() %>%
+  addProviderTiles("CartoDB.Positron", options = providerTileOptions(noWrap = TRUE)) %>%
   setView(lng = -4.2026, lat = 55.8, zoom = 4.7, options = list()) %>%
-  addProviderTiles(providers$CartoDB.Positron) %>% 
-  addPolygons(fillColor = ~pal(no2_diff_2014_2019),
-    weight = 0.1,
-    opacity = 0.9, 
-    color = "black",
-    fillOpacity = 0.8,
-    highlightOptions = highlightOptions(color = "green", weight = 2,
-                                        bringToFront = TRUE),
-    label = no2_diff_labels,
-    labelOptions = labelOptions(
-      style = list("font-weight" = "normal", padding = "3px 8px"),
-      textsize = "15px",
-      direction = "auto")) %>% 
-  addLegend(pal = pal, values = ~no2_diff_2014_2019, opacity = 0.7, title = NULL,
-            position = "bottomright")
+  addHeatmap(data = no2_diff_final,
+             lng = ~lon,
+             lat = ~lat,
+             intensity = ~no2_diff_2014_2019,
+             minOpacity = 0.1,
+             max = 30,
+             radius = 1,
+             blur = 1) %>% 
+  addLegend(pal = pal, values = no2_diff_final$no2_diff_2014_2019,
+                title="Average NO2 Diff")
 ```
+
+
+```{r}
+no2_difference %>% 
+  ggplot() +
+  geom_histogram(aes(x = no2_diff_2014_2019))
+```
+
