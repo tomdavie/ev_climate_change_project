@@ -459,33 +459,33 @@ ev_charging %>%
 ```{r}
 ev_charging_rapid <- read_csv(here("raw_data/electric-vehicle-charging-device-statistics-july-2021/EVCD_01b-Table 1.csv"), skip = 6) %>% 
   clean_names() %>% 
-  select(la_region_code, local_authority_region_name, jul_21) %>% 
-  rename("count_rapid" = jul_21) 
+  select(la_region_code, local_authority_region_name, apr_21) %>% 
+  rename("count_rapid" = apr_21)
 ev_charging_total <- read_csv(here("raw_data/electric-vehicle-charging-device-statistics-july-2021/EVCD_01a-Table 1.csv"), skip = 6) %>% 
   clean_names() %>% 
-  select(la_region_code, local_authority_region_name, jul_21) %>% 
-  rename("count_total" = jul_21)
+  select(la_region_code, local_authority_region_name, apr_21) %>% 
+  rename("count_total" = apr_21)
 
 ev_charging_geo <- inner_join(ev_charging_rapid, ev_charging_total, by = "la_region_code") %>% 
   drop_na() %>% 
   select(la_region_code, local_authority_region_name.x, count_rapid, count_total) %>% 
-  filter(str_detect(local_authority_region_name.x, "[a-z][a-z]")#,
-         #count_rapid != "-") %>% 
-  mutate(local_authority_region_name.x = str_remove_all(local_authority_region_name.x, "[(](Met County)[)]"))
+  filter(str_detect(local_authority_region_name.x, "[a-z][a-z]"), 
+         count_rapid != "-") %>% 
+  mutate(local_authority_region_name.x = str_remove_all(local_authority_region_name.x, "[(](Met County)[)]"),
+         local_authority_region_name.x = str_remove_all(local_authority_region_name.x, "[(]abolished \\w+ \\d+[)]"))
 ```
 
 ```{r}
 # Joining ev_charging_geo + shape file 
 ev_charging_map <- ev_charging_geo %>% 
-  left_join(uk_shape_file, by = c("la_region_code" = "lad19cd")) %>% 
-  drop_na() %>% 
+  inner_join(uk_shape_file, by = c("la_region_code" = "lad19cd")) %>% 
   mutate(across(c(count_rapid:count_total), as.numeric)) %>% 
   st_as_sf()
 ```
 
 ```{r}
 # Set colours and bins
-pal <- colorBin("Reds", domain = ev_charging_map$count_total, bins = c(0, 50, 100, 250, 500, 750, 1000, 1250))
+pal <- colorBin("Reds", domain = ev_charging_map$count_total, bins = 10)
 
 # Set labels
 ev_charging_map_labels <- sprintf(
@@ -495,7 +495,7 @@ ev_charging_map_labels <- sprintf(
 ```
 
 ```{r}
-# Geospatial of EV Vehicles in the UK 2021 Q1
+# Geospatial of EV Total Chargers in the UK April 21
 ev_charging_map %>% 
   leaflet() %>% 
   setView(lng = -4.2026, lat = 55.8, zoom = 4.7, options = list()) %>%
@@ -516,8 +516,36 @@ ev_charging_map %>%
             position = "bottomright")
 ```
 
+
 ```{r}
-ev_charging_map %>% 
-  filter(count_total > 500)
+# Set colours and bins
+pal <- colorBin("Reds", domain = ev_charging_map$count_rapid, bins = 10)
+
+# Set labels
+ev_charging_map_labels <- sprintf(
+  "<strong>%s</strong><br/>%g Chargers",
+  ev_charging_map$local_authority_region_name.x, ev_charging_map$count_rapid, ev_charging_map$count_total) %>% 
+  lapply(htmltools::HTML)
 ```
 
+```{r}
+# Geospatial of EV Rapid Chargers in the UK April 21
+ev_charging_map %>% 
+  leaflet() %>% 
+  setView(lng = -4.2026, lat = 55.8, zoom = 4.7, options = list()) %>%
+  addProviderTiles(providers$CartoDB.Positron) %>% 
+  addPolygons(fillColor = ~pal(count_rapid),
+    weight = 0.1,
+    opacity = 0.9, 
+    color = "black",
+    fillOpacity = 0.8,
+    highlightOptions = highlightOptions(color = "green", weight = 2,
+                                        bringToFront = TRUE),
+    label = ev_charging_map_labels,
+    labelOptions = labelOptions(
+      style = list("font-weight" = "normal", padding = "3px 8px"),
+      textsize = "15px",
+      direction = "auto")) %>% 
+  addLegend(pal = pal, values = ~count_rapid, opacity = 0.7, title = NULL,
+            position = "bottomright")
+```
