@@ -4,7 +4,6 @@ output: html_notebook
 ---
 
 ```{r}
-library(tidyverse)
 library(janitor)
 library(readODS)
 library(httr)
@@ -13,91 +12,21 @@ library(data.table)
 library(sf)
 library(leaflet)
 library(leaflet.extras)
-```
-
-```{r}
-read_ods(here("raw_data/electric-vehicle-charging-device-statistics-june-2021.ods"))
-```
-
-```{r}
-getwd()
-```
-
-```{r}
-APE <- read_ods("raw_data/APE_site_data_tables.ods", sheet = 2)
-```
-
-```{r}
-NO2 <- read_ods("raw_data/NO2_tables.ods")
-```
-
-```{r}
-registry <- GET("http://chargepoints.dft.gov.uk/api/retrieve/registry/format/csv/") %>% 
-  content()
-```
-
-```{r}
-type <- GET("http://chargepoints.dft.gov.uk/api/retrieve/type/format/csv/") %>% 
-  content()
-```
-
-```{r}
-read_csv("Documents/GitHub/ev_climate_change_project/raw_data/no2_by_grid_2019.csv")
-```
-
-
-```{r}
-air_pollution_cap <- GET("https://uk-air.defra.gov.uk/data/sos/service?service=AQD&request=GetCapabilities")
-```
-
-```{r}
-air_pollution_cap <- rbindlist(air_pollution$content, fill = TRUE)
-```
-
-```{r}
-air_pollution_cap <- unnest(air_pollution_cap)
-```
-
-
-```{r}
-air_pollution <- GET("https://uk-air.defra.gov.uk/data/sos/service?service=SOS&version=2.0.0&request=GetObserved&observedProperty=http://dd.eionet.europa.eu/vocabulary/aq/pollutant/8") %>% 
-  content()
-```
-
-```{r}
-air_pollution$exceptions
-```
-
-```{r}
-air_pollution <- rbindlist(air_pollution$exceptions, fill = TRUE) 
-```
-
-```{r}
-air_pollution <- unnest(air_pollution)
-```   
-
-# How many electric vehicles are on the road across the UK by LA?
-
-```{r}
-# Reading in and skipping first 5 rows
-uk_ev <- read_ods(here("raw_data/ev_by_la.ods"), sheet = 2, skip = 5)
-# Making row 1 the variable name
-names(uk_ev) <- uk_ev[1,] 
-# Removing row 1 
-uk_ev <- uk_ev[-1,] %>% 
-  clean_names()
+library(tidyverse)
 ```
 
 ```{r}
 # loading in shape file 
-uk_shape_file <- st_read(here("raw_data/Local_Authority_Districts__April_2019__UK_BFE_v2-shp/Local_Authority_Districts__April_2019__UK_BFE_v2.shp")) %>%
+uk_shape_file <- st_read(here("raw_data/LA_shape/Local_Authority_Districts__April_2019__UK_BFE_v2.shp")) %>%
   clean_names() %>% 
   st_simplify(dTolerance = 1000) %>%
   st_transform("+proj=longlat +datum=WGS84") %>% 
-  select(lad19cd, long, lat, geometry) 
+  dplyr::select(lad19cd, long, lat, geometry) 
 ```
 
 ```{r}
+# Load in clean Electric Vehicles by Local Authority data
+uk_ev <- read_csv(here("clean_data/ev_by_la_clean.csv"))
 # Joining uk_ev + shape file 
 uk_ev_map <- uk_ev %>% 
   left_join(uk_shape_file, by = c("ons_la_code_apr_2019" = "lad19cd")) %>% 
@@ -106,14 +35,15 @@ uk_ev_map <- uk_ev %>%
   st_as_sf()
 ```
 
-
 ```{r}
-    pal <- colorBin("Greens", domain = uk_ev_map$x2021_q1, bins = c(0, 500, 1000, 2500, 5000, 10000, 15000))
-    
-    uk_ev_map_labels <- sprintf(
-      "<strong>%s</strong><br/>%g Electric Vehicles",
-      uk_ev_map$region_local_authority_apr_2019_3, uk_ev_map$x2021_q1) %>% 
-      lapply(htmltools::HTML)
+# Set colours and bins
+pal <- colorBin("Greens", domain = uk_ev_map$x2021_q1, bins = c(0, 500, 1000, 2500, 5000, 10000, 15000))
+
+# Set labels
+uk_ev_map_labels <- sprintf(
+  "<strong>%s</strong><br/>%g Electric Vehicles",
+  uk_ev_map$region_local_authority_apr_2019_3, uk_ev_map$x2021_q1) %>% 
+  lapply(htmltools::HTML)
 ```
 
 ```{r}
@@ -485,9 +415,9 @@ leaflet() %>%
              minOpacity = 0.1,
              max = 30,
              radius = 1,
-             blur = 1) %>% 
+             blur = 2) %>% 
   addLegend(pal = pal, values = no2_diff_final$no2_diff_2014_2019,
-                title="Average NO2 Diff")
+                title="Annual Mean NO2 Change between 2014 and 2019")
 ```
 
 
@@ -495,5 +425,99 @@ leaflet() %>%
 no2_difference %>% 
   ggplot() +
   geom_histogram(aes(x = no2_diff_2014_2019))
+```
+
+```{r}
+ev_charging <- read_csv(here("raw_data/electric-vehicle-charging-device-statistics-july-2021/EVCD_02-Table 1.csv"), skip = 6) %>% 
+  clean_names() %>% 
+  dplyr::select(year, month, total_devices, rapid_devices) %>% 
+  filter(rapid_devices != "NA") %>% 
+  mutate(total_devices = as.numeric(total_devices),
+         other_devices = total_devices - rapid_devices) %>% 
+  select(-total_devices) %>% 
+  pivot_longer(cols = c(other_devices, rapid_devices), names_to = "charger", values_to = "number_of_chargers") %>% 
+  filter(month == "October" | month == "July" & year == "2021") %>% 
+  mutate(charger = factor(charger, levels = c("rapid_devices", "other_devices")))
+```
+
+```{r}
+ev_charging %>% 
+  ggplot() +
+  aes(x = year, y = number_of_chargers, fill = charger) +
+  geom_col() +
+  scale_y_continuous(breaks = seq(0, 30000, 2500)) +
+  coord_flip() +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 270, vjust = 0.5, hjust=1)) +
+  scale_fill_manual(labels = c("Rapid Charger", "Standard Charger"), values = c("#e41a1c", "#4daf4a")) +
+  labs(title = "\nNumber of Electric Vehicle Chargers Growth in the UK\n",
+       x = "\nYear\n",
+       y = "\nNumber of Chargers\n",
+       fill = "Charger Type")
+```
+
+```{r}
+ev_charging_rapid <- read_csv(here("raw_data/electric-vehicle-charging-device-statistics-july-2021/EVCD_01b-Table 1.csv"), skip = 6) %>% 
+  clean_names() %>% 
+  select(la_region_code, local_authority_region_name, jul_21) %>% 
+  rename("count_rapid" = jul_21) 
+ev_charging_total <- read_csv(here("raw_data/electric-vehicle-charging-device-statistics-july-2021/EVCD_01a-Table 1.csv"), skip = 6) %>% 
+  clean_names() %>% 
+  select(la_region_code, local_authority_region_name, jul_21) %>% 
+  rename("count_total" = jul_21)
+
+ev_charging_geo <- inner_join(ev_charging_rapid, ev_charging_total, by = "la_region_code") %>% 
+  drop_na() %>% 
+  select(la_region_code, local_authority_region_name.x, count_rapid, count_total) %>% 
+  filter(str_detect(local_authority_region_name.x, "[a-z][a-z]")#,
+         #count_rapid != "-") %>% 
+  mutate(local_authority_region_name.x = str_remove_all(local_authority_region_name.x, "[(](Met County)[)]"))
+```
+
+```{r}
+# Joining ev_charging_geo + shape file 
+ev_charging_map <- ev_charging_geo %>% 
+  left_join(uk_shape_file, by = c("la_region_code" = "lad19cd")) %>% 
+  drop_na() %>% 
+  mutate(across(c(count_rapid:count_total), as.numeric)) %>% 
+  st_as_sf()
+```
+
+```{r}
+# Set colours and bins
+pal <- colorBin("Reds", domain = ev_charging_map$count_total, bins = c(0, 50, 100, 250, 500, 750, 1000, 1250))
+
+# Set labels
+ev_charging_map_labels <- sprintf(
+  "<strong>%s</strong><br/>%g Chargers",
+  ev_charging_map$local_authority_region_name.x, ev_charging_map$count_total, ev_charging_map$count_rapid) %>% 
+  lapply(htmltools::HTML)
+```
+
+```{r}
+# Geospatial of EV Vehicles in the UK 2021 Q1
+ev_charging_map %>% 
+  leaflet() %>% 
+  setView(lng = -4.2026, lat = 55.8, zoom = 4.7, options = list()) %>%
+  addProviderTiles(providers$CartoDB.Positron) %>% 
+  addPolygons(fillColor = ~pal(count_total),
+    weight = 0.1,
+    opacity = 0.9, 
+    color = "black",
+    fillOpacity = 0.8,
+    highlightOptions = highlightOptions(color = "green", weight = 2,
+                                        bringToFront = TRUE),
+    label = ev_charging_map_labels,
+    labelOptions = labelOptions(
+      style = list("font-weight" = "normal", padding = "3px 8px"),
+      textsize = "15px",
+      direction = "auto")) %>% 
+  addLegend(pal = pal, values = ~count_total, opacity = 0.7, title = NULL,
+            position = "bottomright")
+```
+
+```{r}
+ev_charging_map %>% 
+  filter(count_total > 500)
 ```
 
