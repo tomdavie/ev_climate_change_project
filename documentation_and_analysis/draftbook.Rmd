@@ -355,7 +355,7 @@ no2_2019 <- read_csv(here("raw_data/no2_by_grid_2019.csv"), skip = 6,
   col_names = c("uk_grid_code", "x", "y", "no2")) %>% 
   add_column(year = "2019")
 
-no2_difference <- bind_rows(c(no2_2014, no2_2019))
+no2_difference <- bind_rows(no2_2014, no2_2019)
 ```
 
 ```{r}
@@ -368,16 +368,13 @@ no2_difference <- no2_difference %>%
   pivot_wider(names_from = "year", values_from = "no2") %>% 
   rename("x2014" = "2014",
          "x2019" = "2019") %>% 
-  mutate(no2_diff_2014_2019 = x2014 - x2019) %>% 
+  mutate(no2_diff_2014_2019 = x2014 - x2019)  %>% 
 #Remove this separation when put in cleaning script
-no2_difference <- no2_difference %>% 
-  ungroup()
+  ungroup() %>% 
 #Remove this separation when put in cleaning script
-no2_difference <- no2_difference %>% 
-  drop_na()
+  drop_na() %>% 
 #Remove this separation when put in cleaning script
 # Changing all negative numbers to zero as these aren't of interest to us
-no2_difference <- no2_difference %>% 
   mutate(no2_diff_2014_2019 = if_else(no2_diff_2014_2019 < 0, 0, no2_diff_2014_2019))
 ```
 
@@ -459,12 +456,12 @@ ev_charging %>%
 ```{r}
 ev_charging_rapid <- read_csv(here("raw_data/electric-vehicle-charging-device-statistics-july-2021/EVCD_01b-Table 1.csv"), skip = 6) %>% 
   clean_names() %>% 
-  select(la_region_code, local_authority_region_name, apr_21) %>% 
-  rename("count_rapid" = apr_21)
+  select(la_region_code, local_authority_region_name, x6) %>% 
+  rename("count_rapid" = x6)
 ev_charging_total <- read_csv(here("raw_data/electric-vehicle-charging-device-statistics-july-2021/EVCD_01a-Table 1.csv"), skip = 6) %>% 
   clean_names() %>% 
-  select(la_region_code, local_authority_region_name, apr_21) %>% 
-  rename("count_total" = apr_21)
+  select(la_region_code, local_authority_region_name, x6) %>% 
+  rename("count_total" = x6)
 
 ev_charging_geo <- inner_join(ev_charging_rapid, ev_charging_total, by = "la_region_code") %>% 
   drop_na() %>% 
@@ -489,13 +486,13 @@ pal <- colorBin("Reds", domain = ev_charging_map$count_total, bins = 10)
 
 # Set labels
 ev_charging_map_labels <- sprintf(
-  "<strong>%s</strong><br/>%g Chargers",
+  "<strong>%s</strong><br/>%g Chargers per 100k Population",
   ev_charging_map$local_authority_region_name.x, ev_charging_map$count_total, ev_charging_map$count_rapid) %>% 
   lapply(htmltools::HTML)
 ```
 
 ```{r}
-# Geospatial of EV Total Chargers in the UK April 21
+# Geospatial of EV Chargers Per 100k people in the UK April 21
 ev_charging_map %>% 
   leaflet() %>% 
   setView(lng = -4.2026, lat = 55.8, zoom = 4.7, options = list()) %>%
@@ -529,7 +526,7 @@ ev_charging_map_labels <- sprintf(
 ```
 
 ```{r}
-# Geospatial of EV Rapid Chargers in the UK April 21
+# Geospatial of EV Rapid Chargers per 100k people in the UK April 21
 ev_charging_map %>% 
   leaflet() %>% 
   setView(lng = -4.2026, lat = 55.8, zoom = 4.7, options = list()) %>%
@@ -549,3 +546,157 @@ ev_charging_map %>%
   addLegend(pal = pal, values = ~count_rapid, opacity = 0.7, title = NULL,
             position = "bottomright")
 ```
+
+```{r}
+uk_ev_map_2021 <- uk_ev_map %>% 
+  select(ons_la_code_apr_2019, region_local_authority_apr_2019_3, x2021_q1, geometry)
+
+# filter for desired polygon
+highlands <- uk_ev_map_2021 %>% 
+  filter(region_local_authority_apr_2019_3 == "Highland") 
+
+# st_join seems less dirty
+ev_no2 <- final %>% 
+  st_as_sf(coords = c("lon", "lat"), crs = st_crs(highlands)) %>% 
+  st_join(uk_ev_map_2021, join = st_intersects, left = FALSE) %>% 
+  group_by(region_local_authority_apr_2019_3) %>% 
+  mutate(mean_no2 = sum(no2))
+```
+
+```{r}
+ev_no2 %>% 
+  ggplot() +
+  aes(x = x2021_q1, y = mean_no2) +
+  geom_point() +
+  geom_smooth(se = TRUE)
+```
+
+```{r}
+population <- read_csv(here("raw_data/ukpopestimatesmid2020on2021geography/MYE2 - Persons-Table 1.csv"), skip = 7) %>% 
+  clean_names() %>% 
+  select(code, name, all_ages) %>% 
+  mutate(pop_per_100k = all_ages/100000)
+```
+
+```{r}
+ev_no2_tbl <- tibble(ev_no2) %>% 
+  select(-c(no2, geometry)) %>% 
+  unique()
+```
+
+
+```{r}
+ev_pop_100k <- ev_no2_tbl %>% 
+  left_join(population, by = c("ons_la_code_apr_2019" = "code")) %>% 
+  mutate(ev_per_100k = x2021_q1/pop_per_100k) 
+```
+
+```{r}
+ev_pop_100k %>% 
+  ggplot() +
+  aes(x = ev_per_100k, y = mean_no2) +
+  geom_point() +
+  geom_smooth(se = TRUE)
+```
+
+```{r}
+library(cluster)
+library(factoextra)
+```
+
+```{r}
+ev_scale <- ev_pop_100k %>% 
+  select(region_local_authority_apr_2019_3, x2021_q1, mean_no2) %>% 
+  mutate_if(is.numeric, scale)
+```
+
+```{r}
+ev_pop_100k_scale <- ev_pop_100k %>% 
+  select(region_local_authority_apr_2019_3, ev_per_100k, mean_no2) %>% 
+  mutate_if(is.numeric, scale)
+```
+
+```{r}
+ev_scale %>% 
+  ggplot() +
+  aes(x = x2021_q1, y = mean_no2) +
+  geom_point() +
+  geom_smooth(method = lm)
+```
+
+```{r}
+ev_pop_100k_scale %>% 
+  ggplot() +
+  aes(x = ev_per_100k, y = mean_no2) +
+  geom_point() +
+  geom_smooth(method = lm)
+```
+
+```{r}
+library(corrplot)
+```
+```{r}
+ev_pop_100k_scale %>% 
+  as_tibble() %>%
+  pivot_longer(-region_local_authority_apr_2019_3,
+               names_to = "type", 
+               values_to = "value") %>% 
+  drop_na() %>% 
+  group_by(type) %>%
+  summarise(mean = round(mean(value)), 
+            sd = sd(value))
+```
+```{r}
+ev_pop_100k_scale_numeric <- ev_pop_100k_scale %>% 
+  select(-region_local_authority_apr_2019_3)
+```
+
+
+```{r}
+corrplot(cor(ev_pop_100k_scale_numeric), method = "number", type = "lower")
+```
+
+```{r}
+car_by_fuel_gb <- read_ods(here("raw_data/car_by_fuel_by_year_ALL_UK.ods"), skip = 7) %>% 
+  clean_names() %>% 
+  head(58) %>% 
+  mutate(across(c(petrol:zero_emission8), as.numeric)) %>% 
+  filter(petrol >= 100) %>% 
+  mutate(traditional_fuel = total - alternative_fuels7 - zero_emission8) %>% 
+  select(c("year", "petrol", "diesel", "alternative_fuels7", "zero_emission8")) %>% 
+  pivot_longer(cols = c(petrol:zero_emission8), names_to = c("fuel_type"), values_to = c("count"))
+```
+
+```{r}
+car_by_fuel_gb %>% 
+  ggplot() +
+  aes(x = year, y = count, colour = fuel_type) +
+  geom_smooth(method = lm) +
+  geom_point() 
+```
+
+```{r}
+new_car_by_fuel_gb <- read_ods(here("raw_data/new_car_by_fuel.ods"), skip = 7) %>% 
+  clean_names() %>% 
+  head(21) %>% 
+  mutate(across(c(petrol:zero_emission8), as.numeric)) %>% 
+  filter(petrol >= 100) %>% 
+  mutate(traditional_fuel = total - alternative_fuels7 - zero_emission8) %>% 
+  select(c("date", "petrol", "diesel", "alternative_fuels7", "zero_emission8")) %>% 
+  pivot_longer(cols = c(petrol:zero_emission8), names_to = c("fuel_type"), values_to = c("count"))
+```
+
+```{r}
+new_car_by_fuel_gb %>% 
+  ggplot() +
+  aes(x = date, y = count, colour = fuel_type) +
+  geom_line(aes(group = fuel_type)) +
+  theme_minimal() +
+  labs(title = "\nNew Car Registrations by Fuel Type\n",
+       x = "\nYear\n",
+       y = "\nNumber of Cars ('000s)\n",
+       colour = "Fuel Type") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  scale_colour_manual(labels = c("Alternative Fuels", "Diesel", "Petrol", "Zero Emission"), values = c("#abdda4", "#d7191c", "#fdae61", "#2b83ba")) 
+```
+
