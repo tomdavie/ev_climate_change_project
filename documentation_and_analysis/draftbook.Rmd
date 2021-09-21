@@ -13,6 +13,7 @@ library(sf)
 library(leaflet)
 library(leaflet.extras)
 library(tidyverse)
+library(grDevices)
 ```
 
 ```{r}
@@ -67,32 +68,6 @@ uk_ev_map %>%
   addLegend(pal = pal, values = ~x2021_q1, opacity = 0.7, title = NULL,
             position = "bottomright")
 ```
-# How many electric vehicles are on the road across the UK by LA?
-
-```{r}
-# Reading in and skipping first 5 rows
-uk_ev_postcode <- read_ods(here("raw_data/ev_by_postcode.ods"), sheet = 2, skip = 6) %>% 
-  rename("postcode" = "Postcode District2")
-```
-
-```{r}
-# loading in shape file 
-uk_shape_file_postcode <- st_read(here("raw_data/postcode_shape/EX_Sample.shp")) %>%
-  clean_names() %>% 
-  st_simplify(dTolerance = 1000) %>%
-  st_transform("+proj=longlat +datum=WGS84") #%>% 
-#  select(lad19cd, long, lat, geometry) 
-```
-
-```{r}
-# Joining uk_ev + shape file 
-uk_ev_map_postcode <- uk_ev_postcode %>% 
-  left_join(uk_shape_file_postcode, by = c("ons_la_code_apr_2019" = "lad19cd")) %>% 
-  drop_na() %>% 
-  mutate(across(c(x2021_q1:x2011_q4), as.numeric)) %>% 
-  st_as_sf()
-```
-
 
 ```{r}
     pal <- colorBin("Greens", domain = uk_ev_map$x2021_q1, bins = c(0, 500, 1000, 2500, 5000, 10000, 15000))
@@ -153,7 +128,7 @@ uk_ev_longer <- uk_ev %>%
 uk_ev_longer %>% 
   ggplot() +
   aes(x = year, y = no_of_ev) +
-  geom_col(fill = "lawngreen") +
+  geom_col(fill = "#08a44c") +
   scale_x_continuous(breaks = c(2011:2020)) +
   scale_y_continuous(breaks = seq(0, 220000, by = 20000), limits = c(0, 220000)) +
   labs(title = "\nNumber of Electric Vehicles over time in the UK\n",
@@ -235,7 +210,7 @@ final <- final %>%
 ```
 
 ```{r}
-bins <- c(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
+bins <- 10
 pal <- colorBin("Spectral", domain = final$no2, bins = bins, na.color = "transparent", reverse = TRUE)
 
 leaflet() %>%
@@ -250,7 +225,7 @@ leaflet() %>%
              radius = 1,
              blur = 1) %>% 
   addLegend(pal = pal, values = final$no2,
-                title="Average NO2 Conc")
+                title="Average NO2 Conc in 2019")
 ```
 
 ```{r}
@@ -268,14 +243,17 @@ no2_annual_mean_all <- no2_annual_mean %>%
 no2_annual_mean_all %>% 
   ggplot() +
   aes(x = year, y = annual_mean_no2concentration_mg_m3) + 
-  geom_point() +
-  geom_smooth(se = FALSE) +
+  geom_line() +
   theme_minimal() +
-  scale_y_continuous(breaks = seq(0, 70, 10), limits = c(0, 70)) +
-  theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1)) +
+  scale_y_continuous(breaks = seq(0, 65, 5), limits = c(22, 62)) +
+  scale_x_continuous(breaks = seq(1997, 2020, 1)) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
   labs(x = "\nYear\n", 
        y = "\nAnnual Mean NO2 Conc mg m3\n",
-       title = "\nNO2 over time in the UK\n") 
+       title = "\nNO2 over time in the UK\n") +
+png("no2_time_uk.png", units="in", width=8, height=5, res=300)
+# insert ggplot code
+dev.off()
 ```
 
 
@@ -294,7 +272,7 @@ forecast_no2 <- no2_annual_mean_all %>%
 ```
 
 ```{r}
-autoplot(forecast_no2)
+autoplot(forecast_no2) 
 ```
 
 ```{r}
@@ -317,7 +295,17 @@ forecast_1 %>%
   ggtitle("Forecasts for NO2 Conc over time") +
   xlab("Year") +
   guides(colour = guide_legend(title = "Forecast")) +
-  scale_y_continuous(limit = c(0, 65))
+    theme_minimal() +
+  scale_y_continuous(breaks = seq(0, 65, 5), limits = c(0, 62)) +
+  scale_x_continuous(breaks = seq(1997, 2034, 3)) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  labs(x = "\nYear\n", 
+       y = "\nAnnual Mean NO2 Conc mg m3\n",
+       title = "\nNO2 over time in the UK\n") +
+  scale_y_continuous(limit = c(0, 65)) +
+  png("no2_time_forecast.png", units="in", width=8, height=5, res=300)
+# insert ggplot code
+dev.off()
 ```
 
 ```{r}
@@ -450,7 +438,9 @@ ev_charging %>%
   labs(title = "\nNumber of Electric Vehicle Chargers Growth in the UK\n",
        x = "\nYear\n",
        y = "\nNumber of Chargers\n",
-       fill = "Charger Type")
+       fill = "Charger Type") +
+  png("no_chargers_time_uk.png", units="in", width=8, height=5, res=300)
+
 ```
 
 ```{r}
@@ -584,19 +574,24 @@ ev_no2_tbl <- tibble(ev_no2) %>%
   unique()
 ```
 
-
 ```{r}
 ev_pop_100k <- ev_no2_tbl %>% 
   left_join(population, by = c("ons_la_code_apr_2019" = "code")) %>% 
-  mutate(ev_per_100k = x2021_q1/pop_per_100k) 
+  mutate(ev_per_100k = x2021_q1/pop_per_100k) %>% 
+  drop_na()
 ```
 
 ```{r}
-ev_pop_100k %>% 
+ev_pop_100k_log <- ev_pop_100k %>% 
+  mutate(ev_per_100k = log(ev_per_100k))
+```
+
+```{r}
+ev_pop_100k_log %>% 
   ggplot() +
   aes(x = ev_per_100k, y = mean_no2) +
   geom_point() +
-  geom_smooth(se = TRUE)
+  geom_smooth(se = TRUE, method = lm)
 ```
 
 ```{r}
@@ -605,19 +600,19 @@ library(factoextra)
 ```
 
 ```{r}
-ev_scale <- ev_pop_100k %>% 
+ev_scale <- ev_pop_100k_log %>% 
   select(region_local_authority_apr_2019_3, x2021_q1, mean_no2) %>% 
   mutate_if(is.numeric, scale)
 ```
 
 ```{r}
-ev_pop_100k_scale <- ev_pop_100k %>% 
+ev_pop_100k_scale_log <- ev_pop_100k_log %>% 
   select(region_local_authority_apr_2019_3, ev_per_100k, mean_no2) %>% 
   mutate_if(is.numeric, scale)
 ```
 
 ```{r}
-ev_scale %>% 
+ev_scale_log %>% 
   ggplot() +
   aes(x = x2021_q1, y = mean_no2) +
   geom_point() +
@@ -625,7 +620,7 @@ ev_scale %>%
 ```
 
 ```{r}
-ev_pop_100k_scale %>% 
+ev_pop_100k_scale_log %>% 
   ggplot() +
   aes(x = ev_per_100k, y = mean_no2) +
   geom_point() +
@@ -683,20 +678,123 @@ new_car_by_fuel_gb <- read_ods(here("raw_data/new_car_by_fuel.ods"), skip = 7) %
   filter(petrol >= 100) %>% 
   mutate(traditional_fuel = total - alternative_fuels7 - zero_emission8) %>% 
   select(c("date", "petrol", "diesel", "alternative_fuels7", "zero_emission8")) %>% 
-  pivot_longer(cols = c(petrol:zero_emission8), names_to = c("fuel_type"), values_to = c("count"))
+  pivot_longer(cols = c(petrol:zero_emission8), names_to = c("fuel_type"), values_to = c("count")) %>% 
+  mutate(date = as.numeric(date))
 ```
 
 ```{r}
 new_car_by_fuel_gb %>% 
   ggplot() +
   aes(x = date, y = count, colour = fuel_type) +
-  geom_line(aes(group = fuel_type)) +
+  geom_line(aes(group = fuel_type), size = 1.25) +
   theme_minimal() +
+  scale_y_continuous(breaks = seq(0, 2250, 250)) +
+  scale_x_continuous(limits = c(2001, 2021), breaks = seq(2001, 2020, 1)) + 
   labs(title = "\nNew Car Registrations by Fuel Type\n",
        x = "\nYear\n",
        y = "\nNumber of Cars ('000s)\n",
        colour = "Fuel Type") +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
-  scale_colour_manual(labels = c("Alternative Fuels", "Diesel", "Petrol", "Zero Emission"), values = c("#abdda4", "#d7191c", "#fdae61", "#2b83ba")) 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+  panel.grid.minor = element_blank()) +
+  scale_colour_manual(labels = c("Alternative Fuels", "Diesel", "Petrol", "Zero Emission"), values = c("#abdda4", "#d7191c", "#fdae61", "#2b83ba")) +
+  theme(legend.position = "none")  +
+  annotate("text", x = 2006, y = 1750, label = "Petrol", colour = "#fdae61", fontface = 2) +
+  annotate("text", x = 2005, y = 1100, label = "Diesel", colour = "#d7191c", fontface = 2) +
+  annotate("text", x = 2016, y = 300, label = "Alternative Fuels", colour = "#abdda4", fontface = 2) +
+  annotate("text", x = 2008, y = 150, label = "Zero Emissions", colour = "#2b83ba", fontface = 2) +
+annotate("text", x = 2020.60, y = 950, label = "987", colour = "#fdae61", fontface = 2) +
+  annotate("text", x = 2020.60, y = 250, label = "295", colour = "#d7191c", fontface = 2) +
+  annotate("text", x = 2020.60, y = 450, label = "338", colour = "#abdda4", fontface = 2) +
+  annotate("text", x = 2020.60, y = 50, label = "106", colour = "#2b83ba", fontface = 2) + 
+png("test.png", units="in", width=8, height=5, res=300)
+# insert ggplot code
+dev.off()
+```
+
+```{r}
+uk_ev_top <- uk_ev %>% 
+  mutate(across(c(x2021_q1:x2011_q4), as.numeric)) %>% 
+  filter(region_local_authority_apr_2019_3 == "Milton Keynes" |
+         region_local_authority_apr_2019_3 == "Swindon" |
+         region_local_authority_apr_2019_3 == "Slough" | 
+         region_local_authority_apr_2019_3 == "Leeds") %>% 
+  pivot_longer(cols = c(x2021_q1:x2011_q4), names_to = c("year"), values_to = "no_of_ev") %>% 
+  filter(str_detect(year, "q4")) %>% 
+  mutate(year = str_sub(year, 2, -4))
+```
+
+```{r}
+uk_ev_top <- uk_ev_top %>% 
+  left_join(uk_shape_file, by = c("ons_la_code_apr_2019" = "lad19cd")) %>% 
+  drop_na() %>% 
+  st_as_sf()
+```
+
+```{r}
+# Converting NO2 diff from x y to lat long
+library(proj4)
+proj4string <- "+proj=tmerc +lat_0=49 +lon_0=-2 +k=0.9996012717 +x_0=400000 +y_0=-100000 +ellps=airy +datum=OSGB36 +units=m +no_defs"
+
+no2_all_clean <- no2_clean %>% 
+  rowid_to_column()
+
+# Source data
+xy <- no2_all_clean %>% 
+  dplyr::select(x, y, rowid)
+
+# Transformed data
+pj <- project(xy, proj4string, inverse=TRUE)
+latlon <- data.frame(xy, lat=pj$y, lon=pj$x)
+no2_all_final <-  merge(no2_all_clean, latlon, by.x = "rowid", by.y = "rowid") %>%
+  dplyr::select(lat, lon, no2, year) 
+```
+
+```{r}
+uk_ev_top_2021 <- uk_ev_top %>% 
+  select(ons_la_code_apr_2019, region_local_authority_apr_2019_3, year, no_of_ev)
+
+# filter for desired polygon
+#highlands <- uk_ev_stockport %>% 
+ # filter(region_local_authority_apr_2019_3 == "Highland") 
+
+# st_join seems less dirty
+ev_no2_all_years <- no2_all_final %>% 
+  st_as_sf(coords = c("lon", "lat"), crs = st_crs(uk_ev_top_2021)) %>%
+  st_join(uk_ev_top_2021, join = st_intersects, left = FALSE) 
+```
+
+```{r}
+ev_no2_all_year_top <- tibble(ev_no2_all_years) %>% 
+  filter(year.x == year.y) %>% 
+  mutate(no2 = as.numeric(no2)) %>% 
+  group_by(region_local_authority_apr_2019_3, year.x) %>% 
+  mutate(mean_no2 = mean(no2))
+```
+
+```{r}
+ev_no2_all_year_top %>% 
+  ggplot() +
+  geom_line(aes(x = year.x, y = no_of_ev, colour = region_local_authority_apr_2019_3)) +
+  scale_x_continuous(breaks = c(2011:2019)) +
+  scale_y_continuous(breaks = seq(0, 2750, 250)) +
+  labs(title = "High EV Local Authority over Years",
+       x = "Year",
+       y = "Number of Electric Vehicles",
+       colour = "Local Authority") +
+  theme_minimal()
+```
+
+
+```{r}
+ev_no2_all_year_top %>% 
+  ggplot() +
+  geom_line(aes(x = year.x, y = mean_no2, colour = region_local_authority_apr_2019_3)) +
+  scale_x_continuous(breaks = c(2011:2019)) +
+  scale_y_continuous(breaks = c(10:28)) +
+  labs(title = "Mean NO2 per Year by Local Authority",
+       x = "Year",
+       y = "Mean NO2",
+       colour = "Local Authority") +
+  theme_minimal()
 ```
 
