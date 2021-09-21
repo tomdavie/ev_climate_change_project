@@ -405,11 +405,15 @@ leaflet() %>%
                 title="Annual Mean NO2 Change between 2014 and 2019")
 ```
 
+```{r}
+no2_difference_log <- no2_difference %>% 
+  mutate(no2_diff_2014_2019_log = log(no2_diff_2014_2019))
+```
 
 ```{r}
-no2_difference %>% 
+no2_difference_log %>% 
   ggplot() +
-  geom_histogram(aes(x = no2_diff_2014_2019))
+  geom_histogram(aes(x = no2_diff_2014_2019_log))
 ```
 
 ```{r}
@@ -583,15 +587,21 @@ ev_pop_100k <- ev_no2_tbl %>%
 
 ```{r}
 ev_pop_100k_log <- ev_pop_100k %>% 
-  mutate(ev_per_100k = log(ev_per_100k))
+  mutate(ev_per_100k_log = log(ev_per_100k),
+         mean_no2_log = log(mean_no2))
 ```
 
 ```{r}
 ev_pop_100k_log %>% 
   ggplot() +
-  aes(x = ev_per_100k, y = mean_no2) +
+  aes(x = ev_per_100k_log, y = mean_no2_log) +
   geom_point() +
-  geom_smooth(se = TRUE, method = lm)
+  geom_smooth(se = FALSE, method = lm, colour = "#08a44c") +
+  theme_minimal() +
+  labs(title = "\nElectric Vehicles vs Mean NO2 Conc for each UK Local Authority in 2019\n",
+       x = "\nElectric Vehicle per 100k population (log)\n",
+       y = "\nMean NO2 Conc (log)\n") +
+  png("ev_no2_log.png", units="in", width=8, height=5, res=300)
 ```
 
 ```{r}
@@ -796,5 +806,92 @@ ev_no2_all_year_top %>%
        y = "Mean NO2",
        colour = "Local Authority") +
   theme_minimal()
+```
+
+```{r}
+ev_charging_map_2021 <- ev_charging_map %>% 
+  select(la_region_code, local_authority_region_name.x, count_rapid, count_total, geometry)
+
+# st_join seems less dirty
+ev_charging_no2 <- final %>% 
+  st_as_sf(coords = c("lon", "lat"), crs = st_crs(ev_charging_map_2021)) %>% 
+  st_join(ev_charging_map_2021, join = st_intersects, left = FALSE) %>% 
+  group_by(local_authority_region_name.x) %>% 
+  mutate(mean_no2 = mean(no2))
+```
+  
+```{r}
+ev_charging_no2_log <- ev_charging_no2 %>% 
+  mutate(count_rapid_log = log(count_rapid),
+         count_total_log = log(count_total),
+         mean_no2_log = log(mean_no2))
+```
+  
+```{r}
+ev_charging_no2 %>% 
+  ggplot() +
+  aes(x = count_rapid, y = mean_no2) +
+  geom_point() +
+  geom_smooth(se = TRUE, method = lm)
+```
+
+```{r}
+ev_charging_no2 %>% 
+  ggplot() +
+  aes(x = count_total, y = mean_no2) +
+  geom_point() +
+  geom_smooth(se = TRUE, method = lm)
+```
+
+```{r}
+ev_charging_no2_log %>% 
+  ggplot() +
+  aes(x = count_rapid_log, y = mean_no2_log) +
+  geom_point() +
+  geom_smooth(se = TRUE, method = lm)
+```
+
+```{r}
+ev_charging_no2_log %>% 
+  ggplot() +
+  aes(x = count_total_log, y = mean_no2_log) +
+  geom_point() +
+  geom_smooth(se = TRUE, method = lm, colour = "#08a44c") +
+  theme_minimal() +
+  labs(title = "\nEV Chargers vs Mean NO2 Conc for each UK Local Authority in 2019\n",
+       x = "\nTotal Number of EV Chargers (log)\n",
+       y = "\nMean NO2 Conc (log)\n") +
+  png("ev_charger_no2_log.png", units="in", width=8, height=5, res=300)
+```
+
+```{r}
+income_england <- read_csv(here("raw_data/incomeestimatesforsmallareasdatasetfinancialyearending20181 2/Total annual income-Table 1.csv"), skip = 4) %>% 
+  clean_names() %>% 
+  select(local_authority_code, local_authority_name, total_annual_income) %>% 
+  group_by(local_authority_code) %>% 
+  mutate(mean_total_annual_income =  mean(total_annual_income)) %>% 
+  select(-total_annual_income) %>% 
+  unique()
+```
+
+```{r}
+uk_ev_income <- uk_ev %>% 
+  inner_join(income_england, by = c("ons_la_code_apr_2019" = "local_authority_code")) %>% 
+  select(region_local_authority_apr_2019_3, x2021_q1, mean_total_annual_income) %>% 
+  mutate(x2021_q1 = as.numeric(x2021_q1),
+         x2021_q1_log = log(x2021_q1))
+```
+
+```{r}
+uk_ev_income %>% 
+  ggplot() +
+  aes(x = x2021_q1_log, y = mean_total_annual_income) +
+  geom_point() +
+  geom_smooth(method = lm, colour = "#08a44c", se = FALSE) +
+  theme_minimal() +
+  labs(title = "\nEVs vs Mean Annual Income for Local Authorities in England and Wales\n",
+       x = "\nTotal Number of EV Chargers (log)\n",
+       y = "\nMean Total Annual Income\n") +
+  png("ev_income.png", units="in", width=8, height=5, res=300)
 ```
 
