@@ -1,0 +1,105 @@
+---
+title: "The Road to Sustainability - Final Project"
+output:
+  html_document:
+    toc: yes
+    toc_float: yes
+    df_print: paged
+    pdf_document: default
+  word_document:
+    toc: yes
+---
+
+## Context
+
+#### Business intelligence and data-driven decision making
+
+The Department of Transport and the Department for Environment, Food and Rural Affairs will gain an understanding of trends to date and a forward look at how they should deliver a financial package towards their vehicular zero emission goals. They will be able to make better decisions as they will have a more rounded view of where the UK currently stands and have an idea of how to measure impact going forward. 
+
+#### Domain knowledge and the business context
+
+The Department for Transport and the Department for Environment, Food and Rural Affairs are responsible for transport and the environment respectively. Together they have a combined target to reduce carbon emissions on UK roads to battle climate change. My analysis fits this aim as it shows them insights into data they already hold and gives them a plan of where to allocate resources to tackle this issue.
+
+## Data
+
+#### Internal and external data sources
+
+Internal 
+
+- Department for Transport
+- Department for Environment, Food and Rural Affairs 
+- Office for National Statistics 
+
+External
+
+- None
+
+#### Types of data
+
+Numerical Data
+
+- Continuous - Number of electric vehichles, NO2 concentration, etc
+- Discrete - None
+
+Categorical Data
+
+- Nominal - Fuel type, charger type, etc
+- Ordinal - Year, etc
+
+
+#### Data formats
+
+My data mainly came in ODS format. I had a few in CSV and a single Shape file. 
+
+#### Data quality and bias
+
+This is a complete publically available dataset which is collected from official vehicle registers and air sensors. For that reason, there is no obvious bias in the data.
+
+## Ethics
+
+#### Ethical issues in data sourcing and extraction
+
+The data that was sourced from vehicle registers will not have consent from the vehicle owners. This could be a small ethical concern over usage consent.
+
+#### Ethical implications of business requirements
+
+Some people may oppose moving away from traditional fuel vehicles towards zero emission vehicles and so we are using their vehicle data to study a business requirement which is against their beliefs. 
+
+## Analysis
+
+#### Stages in the data analysis process
+
+- Planning & Trello board build
+- Git repo creation and management
+- Choosing datasets
+- Data cleaning
+- Data wrangling
+- Deciding on visualisations
+- Creating visualisations
+- Gaining feedback from experts
+- Presentation building
+- Creating documentation
+
+#### Tools for data analysis
+
+- Trello (planning & task allocation)
+- Git/GitHub (collaboration & version control)
+- R Studio (cleaning data and creating visualisations)
+
+#### Descriptive, diagnostic, predictive and prescriptive analysis
+
+**Descriptive Analytics** tells you what happened in the past.
+
+Large parts of my report are looking at trends in electrical vehicle, electric vehicle charging and NO2 data to date. These fall into descriptive analysis as it give insights into what has happened in the past.
+
+**Diagnostic Analytics** helps you understand why something happened in the past.
+
+NA
+
+**Predictive Analytics** predicts what is most likely to happen in the future.
+
+I analysised NO2 conc data and used a forecast to look into the future to predict what NO2 conc may look like. This would be predictive analysis as I'm trying to make a prediction of future data.
+
+**Prescriptive Analytics** recommends actions you can take to affect those outcomes.
+
+I analysed electric vehicle charger distribution and affordability of electric vehicles before making a recommendation of actions that could be taken to improve accessibility. This would fall under prescriptive analysis and I have recommended actions to affect outcomes. 	
