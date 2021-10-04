@@ -890,7 +890,7 @@ uk_ev_income %>%
   geom_smooth(method = lm, colour = "#08a44c", se = FALSE) +
   theme_minimal() +
   labs(title = "\nEVs vs Mean Annual Income for Local Authorities in England and Wales\n",
-       x = "\nTotal Number of EV Chargers (log)\n",
+       x = "\nNumber of Electric Vehicles (log)\n",
        y = "\nMean Total Annual Income\n") +
   png("ev_income.png", units="in", width=8, height=5, res=300)
 ```
