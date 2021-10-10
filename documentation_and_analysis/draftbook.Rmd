@@ -683,7 +683,7 @@ car_by_fuel_gb %>%
 ```{r}
 new_car_by_fuel_gb <- read_ods(here("raw_data/new_car_by_fuel.ods"), skip = 7) %>% 
   clean_names() %>% 
-  head(21) %>% 
+  head(21) %>%
   mutate(across(c(petrol:zero_emission8), as.numeric)) %>% 
   filter(petrol >= 100) %>% 
   mutate(traditional_fuel = total - alternative_fuels7 - zero_emission8) %>% 
